@@ -6,11 +6,14 @@ SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 SetTitleMatchMode, 2
 
 nInitTabs = 2	; nInitTabs, input, how many tabs should be between/before commas if everything else is empty
+sCommand := ""	; puts this string at the beginning of the row, after nInitTabs tabs
 nTabs = 1		; nTabs, input, how many tabs should be between/before commas if everything else is empty
 nSpaces = 4		; a Tab is nSpaces spaces
-nDigs = 3		; nDigs digits after decimal; for rounding
+nDigs = 4		; nDigs digits after decimal; for rounding
 nCols = 0
 sStatus = 0		;0 = unchanged
+sStatus2 = 0	;0 = unchanged. Status for 4000 statuses to catch circle shadings
+bAddComma	= 0	; Force add/remove comma at the line ends
 
 ; https://jacks-autohotkey-blog.com/2020/06/08/autohotkey-tooltip-command-tricks/
 OnMessage(0x200,"CheckControl") ; WM_MOUSEMOVE = 0x200
@@ -23,24 +26,37 @@ CheckControl()
   IfEqual, VarControl, Edit1
     Message := "Number of leading tabs"
   Else IfEqual, VarControl, Edit2
-	Message := "Number of tabs between commas"
+	Message := "A command string at the beginning"
   Else IfEqual, VarControl, Edit3
-    Message := "Number of digits after decimal point"
+	Message := "Number of tabs between commas"
   Else IfEqual, VarControl, Edit4
+    Message := "Number of digits after decimal point"
+  Else IfEqual, VarControl, Edit5
     Message := "Status code string"
+  Else IfEqual, VarControl, Edit6
+    Message := "Status code string for 4000 statuses"
+; Else IfEqual, VarControl, Edit7
+;    Message := "Put comma at the end"
+;  Else IfEqual, VarControl, Edit8
+;    Message := "Status code string for 4000 statuses"
+  Else IfEqual, VarControl, Checkbox1
+    Message := ""
   ToolTip % Message
 }
 
 TabulatorGUI()
 {
-	global nTabs, sStatus, inText, nDigs, nSpaces, nInitTabs
+	global inText, nSpaces, nInitTabs, sCommand, nTabs, nDigs, sStatus, sStatus2, bAddComma
 
 	Gui, 1: New
 	Gui, 1: font, s10, Courier New
 	Gui, 1: Add, Edit,        w45 h20   x5  y0 vnInitTabs	gInitTabsRecalculate,	%nInitTabs%
-	Gui, 1: Add, Edit,        w45 h20  x55  y0 vnTabs		gTabsRecalculate, 		%nTabs%
-	Gui, 1: Add, Edit,        w45 h20 x105  y0 vnDigs		gDigsRecalculate,		%nDigs%
-	Gui, 1: Add, Edit,        w45 h20 x155  y0 vsStatus		gStatusRecalculate, 	%sStatus%
+	Gui, 1: Add, Edit,        w45 h20  x55  y0 vsCommand	gInitTabsRecalculate,	%sCommand%
+	Gui, 1: Add, Edit,        w45 h20 x105  y0 vnTabs		gTabsRecalculate, 		%nTabs%
+	Gui, 1: Add, Edit,        w45 h20 x155  y0 vnDigs		gDigsRecalculate,		%nDigs%
+	Gui, 1: Add, Edit,        w45 h20 x205  y0 vsStatus		gStatusRecalculate, 	%sStatus%
+	Gui, 1: Add, Edit,        w45 h20 x255  y0 vsStatus2	gStatusRecalculate, 	%sStatus2%
+	Gui, 1: Add, Checkbox,    x305  y0 vbAddComma Check3 CheckedGray	gStatusRecalculate, 	Comma at end
 
 	Gui, 1: Add, Edit,       w590 r10   x5 y25 T16 WantTab vinText,			%inText%
 
@@ -56,11 +72,14 @@ TabulatorGUI()
 
 	StatusRecalculate:
 		GuiControlGet, sStatus
+		GuiControlGet, sStatus2
+		GuiControlGet, bAddComma
 		gosub Reformat
 	return
 
 	InitTabsRecalculate:
 		GuiControlGet, nInitTabs
+		GuiControlGet, sCommand
 		gosub Reformat
 	return
 
@@ -151,6 +170,11 @@ TabulatorGUI()
 					_inText .= "`t"
 			}
 
+			if (sCommand <> "")
+			{
+				_inText .= sCommand
+			}
+
 			_iRow := A_Index
 			_iPrevPos := 0
 			_inText .= sCommands[_iRow]
@@ -169,57 +193,54 @@ TabulatorGUI()
 				Loop, % _nSpaces
 					_inText .= " "
 
-				if (A_Index < nCols)
+				if (A_Index == nCols and sArray[_iRow][A_Index] <> -1)
 				{
-				}
-				else
-				{
-					if (sStatus <> "0" and sStatus <> "")
+					if (sArray[_iRow][A_Index] ~= "7\d{2}\b" > 0)
 					{
-						if sArray[_iRow][A_Index] <> -1
+						if (sStatus ~= "\d+")
 						{
-							if (sStatus ~= "\d+")
-							{
-
-								if (sArray[_iRow][A_Index] ~= "7\d{2}" > 0)
-								{
-									sArray[_iRow][A_Index] := 700 + sStatus
-								}
-								else if (sArray[_iRow][A_Index] ~= "9\d{2}" > 0)
-								{
-									sArray[_iRow][A_Index] := 900 + sStatus
-								}
-								else if (sArray[_iRow][A_Index] ~= "4\d{3}" > 0)
-								{
-									sArray[_iRow][A_Index] := 4000 + sStatus
-								}
-								else
-								{
-									sArray[_iRow][A_Index] := sStatus
-								}
-							}
-							else
-							{
-								if (sArray[_iRow][A_Index] ~= "7\d{2}" > 0)
-								{
-									sArray[_iRow][A_Index] := sStatus . " +  700"
-								}
-								else if (sArray[_iRow][A_Index] ~= "9\d{2}" > 0)
-								{
-									sArray[_iRow][A_Index] := sStatus . " +  900"
-								}
-								else if (sArray[_iRow][A_Index] ~= "4\d{3}" > 0)
-								{
-									sArray[_iRow][A_Index] := sStatus . " + 4000"
-								}
-								else
-								{
-									sArray[_iRow][A_Index] := sStatus
-								}
-							}
+							sArray[_iRow][A_Index] := 700 + sStatus
+						}
+						else if (sStatus <> "0" and sStatus <> "")
+						{
+							sArray[_iRow][A_Index] := sStatus . " +  700"
+						}
+					}
+					else if (sArray[_iRow][A_Index] ~= "9\d{2}\b" > 0)
+					{
+						if (sStatus ~= "\d+")
+						{
+							sArray[_iRow][A_Index] := 900 + sStatus
+						}
+						else if (sStatus <> "0" and sStatus <> "")
+						{
+							sArray[_iRow][A_Index] := sStatus . " +  900"
+						}
+					}
+					else if (sArray[_iRow][A_Index] ~= "4\d{3}\b" > 0)
+					{
+						if (sStatus2 ~= "\d+")
+						{
+							sArray[_iRow][A_Index] := 4000 + sStatus2
+						}
+						else if (sStatus2 <> "0" and sStatus2 <> "")
+						{
+							sArray[_iRow][A_Index] := sStatus2 . " + 4000"
+						}
+					}	
+					else
+					{
+						if (sStatus ~= "\d+")
+						{
+							sArray[_iRow][A_Index] := sStatus
+						}
+						else if (sStatus <> "0" and sStatus <> "")
+						{
+							sArray[_iRow][A_Index] := sStatus
 						}
 					}
 				}
+				
 				_inText .= RegExReplace(sArray[_iRow][A_Index], "^\s*")
 
 				if (A_Index < nCols)
@@ -227,22 +248,24 @@ TabulatorGUI()
 					_inText .= ","
 				}
 			}
+			
 			if (_iRow < nRows)
 			{
-				if (sCommands[_iRow] = "")
+				if (sCommand == "" and sCommands[_iRow] == "" and bAddComma == -1 or bAddComma == 1)
 				{
 					_inText .= ","
 				}
 				_inText .= "`n"
 			}
 		}
+		
 		GuiControl,, inText, %_inText%
 	return
 }
 
 OnClipboardChange:
 ;IfWinActive, Notepad++
-IfWinActive, ARCHICAD
+IfWinActive, Archicad
 {
 	Loop, Parse, Clipboard, `n
 	{
